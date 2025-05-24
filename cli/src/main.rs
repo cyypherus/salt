@@ -11,11 +11,15 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use futures_util::{SinkExt, StreamExt};
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Response, Server};
+use hyper::upgrade::Upgraded;
+use hyper::{Body, Error as HyperError, Request, Response, Server, StatusCode};
 use hyper_staticfile::Static;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
+use tokio_tungstenite::WebSocketStream;
+use tungstenite::Message;
 
 #[derive(Parser)]
 #[clap(author, version, about = "Salt development CLI")]
@@ -68,10 +72,15 @@ async fn main() -> Result<()> {
             // Build first
             build_wasm(release)?;
 
+            // Create a broadcast channel for live reload notifications
+            let (reload_tx, _) = broadcast::channel::<()>(100);
+            let reload_tx = Arc::new(reload_tx);
+
             // Start the watcher if requested
             if !no_watch {
                 // Set up a channel for file change notifications
                 let (tx, mut rx) = mpsc::channel(100);
+                let reload_tx_clone = reload_tx.clone();
 
                 // Start the file watcher in a separate thread
                 std::thread::spawn(move || {
@@ -84,13 +93,17 @@ async fn main() -> Result<()> {
                         println!("{}", "File changes detected, rebuilding...".blue());
                         if let Err(e) = build_wasm(release) {
                             println!("{} {}", "Error rebuilding:".red(), e);
+                        } else {
+                            // Notify connected clients to reload
+                            println!("{}", "Notifying browsers to reload...".blue());
+                            let _ = reload_tx_clone.send(());
                         }
                     }
                 });
             }
 
             // Start the development server
-            start_server(port).await?;
+            start_server(port, reload_tx).await?;
         }
         Commands::Check => {
             check_dependencies()?;
@@ -191,7 +204,43 @@ fn build_wasm(release: bool) -> Result<()> {
     println!("{}", "Writing template files...".blue());
     copy_dir_contents(web_dir).context("Failed to write template files")?;
 
+    // Inject live reload script into index.html
+    inject_livereload(web_dir)?;
+
     println!("{}", "WebAssembly build completed successfully!".green());
+    Ok(())
+}
+
+// Inject live reload script into index.html
+fn inject_livereload(web_dir: &Path) -> io::Result<()> {
+    let index_path = web_dir.join("index.html");
+    let index_content = fs::read_to_string(&index_path)?;
+
+    // Add the live reload script right before the closing </body> tag
+    let livereload_script = r#"
+    <script>
+        // Live reload
+        (function() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/__livereload`);
+            ws.onmessage = function() {
+                console.log("Live reload: Reloading page");
+                window.location.reload();
+            };
+            ws.onopen = function() {
+                console.log("Live reload: Connected");
+            };
+            ws.onclose = function() {
+                console.log("Live reload: Disconnected, reconnecting in 1s");
+                setTimeout(() => window.location.reload(), 1000);
+            };
+        })();
+    </script>
+    </body>"#;
+
+    let modified_content = index_content.replace("</body>", livereload_script);
+    fs::write(index_path, modified_content)?;
+
     Ok(())
 }
 
@@ -267,7 +316,7 @@ fn copy_dir_contents(dst: &Path) -> io::Result<()> {
     Ok(())
 }
 
-async fn start_server(port: u16) -> Result<()> {
+async fn start_server(port: u16, reload_tx: Arc<broadcast::Sender<()>>) -> Result<()> {
     let web_dir = Path::new("web");
     if !web_dir.exists() {
         return Err(anyhow::anyhow!("Web directory not found"));
@@ -280,12 +329,15 @@ async fn start_server(port: u16) -> Result<()> {
     }
 
     let static_handler = Static::new(web_dir);
-
     let make_service = make_service_fn(move |_| {
         let static_handler = static_handler.clone();
+        let reload_tx = reload_tx.clone();
+
         async move {
-            Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
+            Ok::<_, HyperError>(service_fn(move |req: Request<Body>| {
                 let static_handler = static_handler.clone();
+                let reload_tx = reload_tx.clone();
+
                 async move {
                     let path = req.uri().path();
 
@@ -293,8 +345,50 @@ async fn start_server(port: u16) -> Result<()> {
                     let display_path = path.split('?').next().unwrap_or(path);
                     println!("{} {}", "Request:".blue(), display_path);
 
-                    let response = static_handler.serve(req).await?;
-                    Ok::<Response<Body>, std::io::Error>(response)
+                    // Handle WebSocket upgrade for live reload
+                    if path == "/__livereload" {
+                        if hyper_tungstenite::is_upgrade_request(&req) {
+                            let (response, websocket) = match hyper_tungstenite::upgrade(req, None)
+                            {
+                                Ok(upgrade) => upgrade,
+                                Err(e) => {
+                                    eprintln!("WebSocket upgrade error: {:?}", e);
+                                    return Ok(Response::builder()
+                                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                        .body(Body::from("WebSocket upgrade failed"))
+                                        .unwrap());
+                                }
+                            };
+
+                            // Spawn a task to handle the WebSocket connection
+                            let reload_rx = reload_tx.subscribe();
+                            tokio::spawn(async move {
+                                if let Ok(ws) = websocket.await {
+                                    handle_websocket(ws, reload_rx).await;
+                                }
+                            });
+
+                            return Ok(response);
+                        }
+
+                        // Not a valid WebSocket request
+                        return Ok(Response::builder()
+                            .status(StatusCode::BAD_REQUEST)
+                            .body(Body::from("Expected WebSocket request"))
+                            .unwrap());
+                    }
+
+                    let response = match static_handler.serve(req).await {
+                        Ok(resp) => resp,
+                        Err(e) => {
+                            eprintln!("Static file error: {:?}", e);
+                            return Ok(Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body(Body::from("Static file error"))
+                                .unwrap());
+                        }
+                    };
+                    Ok::<Response<Body>, HyperError>(response)
                 }
             }))
         }
@@ -326,4 +420,24 @@ async fn start_server(port: u16) -> Result<()> {
     println!("{}", "Server shutdown complete".green());
 
     Ok(())
+}
+
+// Handle WebSocket connections for live reload
+async fn handle_websocket(
+    websocket: WebSocketStream<Upgraded>,
+    mut reload_rx: broadcast::Receiver<()>,
+) {
+    let (mut tx, _rx) = websocket.split();
+
+    println!("{}", "New live reload client connected".blue());
+
+    // Listen for reload messages and forward them to the WebSocket
+    while let Ok(()) = reload_rx.recv().await {
+        if let Err(e) = tx.send(Message::Text("reload".to_string())).await {
+            println!("{} {}", "Error sending reload message:".red(), e);
+            break;
+        }
+    }
+
+    println!("{}", "Live reload client disconnected".blue());
 }

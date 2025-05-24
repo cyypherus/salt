@@ -30,7 +30,7 @@ macro_rules! salt_app {
                 self.app.handle_event(event)
             }
 
-            pub fn render_svg(&self, width: u32, height: u32) -> String {
+            pub fn render_svg(&mut self, width: u32, height: u32) -> String {
                 let dimensions = $crate::Dimensions { width, height };
                 self.app.render(dimensions)
             }

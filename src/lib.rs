@@ -78,7 +78,7 @@ pub trait App {
     fn handle_event(&mut self, event: MouseEvent) -> bool;
 
     /// Render the application to SVG
-    fn render(&self, dimensions: Dimensions) -> String;
+    fn render(&mut self, dimensions: Dimensions) -> String;
 
     /// Initialize the app with any setup required
     fn init(&mut self) {}
