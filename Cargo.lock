@@ -943,7 +943,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "salt-dev"
+name = "salt-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",

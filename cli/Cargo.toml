@@ -1,5 +1,5 @@
 [package]
-name = "salt-dev"
+name = "salt-cli"
 version = "0.1.0"
 edition = "2021"
 description = "Development CLI for Salt"
@@ -16,5 +16,5 @@ colored = "2.0"
 ctrlc = "3.4"
 
 [[bin]]
-name = "salt-dev"
+name = "salt"
 path = "src/main.rs"

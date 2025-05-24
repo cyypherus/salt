@@ -169,7 +169,9 @@ fn build_wasm(release: bool) -> Result<()> {
         .arg("--target")
         .arg("web")
         .arg("--out-dir")
-        .arg("web/js/pkg");
+        .arg("web/js/pkg")
+        .arg("--out-name")
+        .arg("app");
 
     if release {
         cmd.arg("--release");
@@ -254,17 +256,13 @@ fn copy_dir_contents(dst: &Path) -> io::Result<()> {
         fs::create_dir_all(&js_dir)?;
     }
 
-    // Write bootstrap.js
+    // Write salt.js
     fs::write(
-        js_dir.join("bootstrap.js"),
+        js_dir.join("salt.js"),
         include_str!("../../templates/js/salt.js"),
     )?;
 
-    // Create css directory if it doesn't exist
-    let css_dir = dst.join("css");
-    if !css_dir.exists() {
-        fs::create_dir_all(&css_dir)?;
-    }
+    // No CSS directory needed
 
     Ok(())
 }

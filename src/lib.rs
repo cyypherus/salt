@@ -3,9 +3,12 @@
 //! Salt provides a simple interface for creating SVG-based web applications
 //! using Rust, with WebAssembly as the compilation target.
 
-// Public API
 mod wasm;
-pub use wasm::export_app;
+
+use std::fmt;
+
+pub use wasm_bindgen;
+pub use web_sys;
 
 /// Event types that can be handled by Salt applications
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +17,17 @@ pub enum EventType {
     MouseDown,
     MouseUp,
     MouseMove,
+}
+
+impl fmt::Display for EventType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EventType::Click => write!(f, "click"),
+            EventType::MouseDown => write!(f, "mousedown"),
+            EventType::MouseUp => write!(f, "mouseup"),
+            EventType::MouseMove => write!(f, "mousemove"),
+        }
+    }
 }
 
 impl From<&str> for EventType {
@@ -65,47 +79,7 @@ pub trait App {
 
     /// Render the application to SVG
     fn render(&self, dimensions: Dimensions) -> String;
-}
 
-// Default implementation
-struct DefaultApp {
-    clicks: Vec<(f64, f64)>,
-}
-
-impl App for DefaultApp {
-    fn new() -> Self {
-        Self { clicks: Vec::new() }
-    }
-
-    fn handle_event(&mut self, event: MouseEvent) -> bool {
-        if event.event_type == EventType::Click {
-            self.clicks.push((event.x, event.y));
-            return true;
-        }
-        false
-    }
-
-    fn render(&self, dimensions: Dimensions) -> String {
-        let mut svg = format!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">"#,
-            dimensions.width, dimensions.height, dimensions.width, dimensions.height
-        );
-
-        // Add a background rectangle
-        svg.push_str(&format!(
-            r#"<rect x="0" y="0" width="{}" height="{}" fill="blue" />"#,
-            dimensions.width, dimensions.height
-        ));
-
-        // Draw circles for each click
-        for (x, y) in &self.clicks {
-            svg.push_str(&format!(
-                r#"<circle cx="{}" cy="{}" r="5" fill="red" />"#,
-                x, y
-            ));
-        }
-
-        svg.push_str("</svg>");
-        svg
-    }
+    /// Initialize the app with any setup required
+    fn init(&mut self) {}
 }
