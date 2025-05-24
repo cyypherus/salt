@@ -53,6 +53,8 @@ pub struct DrawingApp {
     drag_start_y: Option<f32>,
     hover_shape_idx: Option<usize>,
     dragging_shape_idx: Option<usize>,
+    // Store which element received the mouse down for click detection
+    mouse_down_idx: Option<usize>,
 }
 
 impl App for DrawingApp {
@@ -68,6 +70,7 @@ impl App for DrawingApp {
             drag_start_y: None,
             hover_shape_idx: None,
             dragging_shape_idx: None,
+            mouse_down_idx: None,
         }
     }
 
@@ -82,15 +85,13 @@ impl App for DrawingApp {
                 let mut shapes = Vec::new();
                 std::mem::swap(&mut shapes, &mut self.view.shapes);
 
-                // Store drag start position
+                // Store drag start position and the element that received mouse down
                 self.drag_start_x = Some(x);
                 self.drag_start_y = Some(y);
                 self.dragging_shape_idx = Some(idx);
-
-                // Call the shape's on_click handler
-                shapes[idx].on_click(self);
-
-                // Call the shape's on_drag handler with start phase
+                self.mouse_down_idx = Some(idx);
+                // Call the on_drag handler with start phase,
+                // on_click will be called on mouse up if it's still the same element
                 if let (Some(start_x), Some(start_y)) = (self.drag_start_x, self.drag_start_y) {
                     shapes[idx].on_drag(
                         self,
@@ -112,28 +113,41 @@ impl App for DrawingApp {
             self.button_clicked = None;
             self.is_drawing = false;
 
-            // Handle drag end if we were dragging
-            if let (Some(idx), Some(start_x), Some(start_y)) = (
+            // Check if we released on the same shape that we started on (click behavior)
+            let current_idx = self.view.hit_test(x, y);
+
+            if let (Some(drag_idx), Some(start_x), Some(start_y), Some(down_idx)) = (
                 self.dragging_shape_idx,
                 self.drag_start_x,
                 self.drag_start_y,
+                self.mouse_down_idx,
             ) {
-                // Notify the shape of drag end
                 let mut shapes = Vec::new();
                 std::mem::swap(&mut shapes, &mut self.view.shapes);
-                shapes[idx].on_drag(
+
+                // Notify the shape of drag end
+                shapes[drag_idx].on_drag(
                     self,
                     DragPhase::End,
                     Point::new(start_x, start_y),
                     Point::new(x, y),
                 );
+
+                // If mouse up is on the same element as mouse down, trigger click
+                // We always send the click event regardless of whether we've been dragging
+                // This ensures that dragging and clicking are not mutually exclusive
+                if current_idx == Some(down_idx) {
+                    shapes[down_idx].on_click(self);
+                }
+
                 std::mem::swap(&mut shapes, &mut self.view.shapes);
             }
 
-            // Reset drag state
+            // Reset all interaction state
             self.drag_start_x = None;
             self.drag_start_y = None;
             self.dragging_shape_idx = None;
+            self.mouse_down_idx = None;
 
             return true;
         }
@@ -143,7 +157,8 @@ impl App for DrawingApp {
             // Handle hover effect
             let hover_idx = self.view.hit_test(x, y);
 
-            // If we've moved onto a new shape or off a shape
+            // Always handle hover effects, even during drags
+            // This ensures hover and drag are not mutually exclusive
             if hover_idx != self.hover_shape_idx {
                 let mut shapes = Vec::new();
                 std::mem::swap(&mut shapes, &mut self.view.shapes);
@@ -160,6 +175,7 @@ impl App for DrawingApp {
                 std::mem::swap(&mut shapes, &mut self.view.shapes);
                 self.hover_shape_idx = hover_idx;
 
+                // Return true to indicate we processed a hover event
                 return true;
             }
 
@@ -169,7 +185,6 @@ impl App for DrawingApp {
                 self.drag_start_x,
                 self.drag_start_y,
             ) {
-                // Notify the shape of drag movement
                 let mut shapes = Vec::new();
                 std::mem::swap(&mut shapes, &mut self.view.shapes);
                 shapes[idx].on_drag(
@@ -328,7 +343,8 @@ fn view(app: &mut DrawingApp, dimensions: Dimensions) {
                         app.view
                             .path(path.stroke_width(10.).stroke(stroke.color.color()));
                     }
-                }),
+                })
+                .pad(20.),
             ]),
         ])
     }))
