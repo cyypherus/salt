@@ -4,25 +4,15 @@
 
 use crate::{ui::view::View, Dimensions, DragState, HoverState};
 
-/// Gesture state for interactive applications
 #[derive(Default, Clone, Debug)]
 pub struct GestureState {
-    /// Drag gesture state
     pub drag: DragState,
-    /// Hover gesture state
     pub hover: HoverState,
 }
 
-/// Context for Salt applications
-///
-/// This struct encapsulates the state needed by Salt applications,
-/// including the view and the gesture tracking state.
 pub struct AppCtx<T: ?Sized> {
-    /// The view for rendering
     pub view: View<T>,
-    /// Gesture tracking state
     pub gestures: GestureState,
-    /// Current dimensions
     pub dimensions: Dimensions,
 }
 
