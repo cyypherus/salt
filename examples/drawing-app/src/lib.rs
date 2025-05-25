@@ -102,6 +102,7 @@ impl App for DrawingApp {
                     draw(canvas).pad(20.),
                 ]),
             ])
+            .pad(20.)
         }))
         .draw(
             Area::new(0., 0., dimensions.width as f32, dimensions.height as f32),

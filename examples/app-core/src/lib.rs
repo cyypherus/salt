@@ -1,11 +1,8 @@
 use salt::{salt_app, Dimensions, EventType, MouseEvent};
 use wasm_bindgen::prelude::*;
 
-// Basic counter app that increments a counter when a button is clicked
 pub struct CounterApp {
-    // Application state
     count: i32,
-    // Flags to track interaction state
     btn_hover: bool,
     btn_clicked: bool,
 }
@@ -103,7 +100,6 @@ impl AppCore for CounterApp {
     }
 }
 
-// Helper function to check if a point is inside a rectangle
 fn is_point_in_rect(
     x: f32,
     y: f32,
