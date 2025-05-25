@@ -67,7 +67,7 @@ pub struct Dimensions {
 ///
 /// Implement this trait to create a Salt application that can be
 /// rendered as SVG and respond to user interactions.
-pub trait App {
+pub trait AppCore {
     /// Create a new instance of the application
     fn new() -> Self;
 
@@ -88,7 +88,7 @@ pub trait App {
 /// This trait provides a more streamlined way to build Salt applications
 /// by handling most of the common interaction patterns automatically.
 /// Applications only need to implement the view method.
-pub trait InteractiveApp {
+pub trait App {
     type State;
     /// Create a new instance of the application
     fn new() -> Self;
@@ -105,9 +105,9 @@ pub trait InteractiveApp {
 /// Implementation of App for any type that implements InteractiveApp
 ///
 /// This provides all the gesture and event handling automatically.
-impl<T: InteractiveApp> App for T {
+impl<T: App> AppCore for T {
     fn new() -> Self {
-        <T as InteractiveApp>::new()
+        <T as App>::new()
     }
 
     fn handle_event(&mut self, event: MouseEvent) -> bool {
@@ -266,6 +266,7 @@ macro_rules! salt_app {
     ($app_type:ty) => {
         use $crate::wasm_bindgen::prelude::*;
         use $crate::web_sys::console;
+        use $crate::AppCore;
 
         #[wasm_bindgen]
         pub struct SaltApp {

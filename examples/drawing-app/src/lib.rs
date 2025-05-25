@@ -7,7 +7,7 @@ use salt::{
         gesture::DragPhase,
         AppCtx, Color,
     },
-    App, Dimensions, InteractiveApp,
+    App, Dimensions,
 };
 use wasm_bindgen::prelude::*;
 
@@ -54,7 +54,7 @@ pub struct DrawingAppState {
     hovered_color: Option<Palette>,
 }
 
-impl InteractiveApp for DrawingApp {
+impl App for DrawingApp {
     type State = DrawingAppState;
     fn new() -> Self {
         Self {
