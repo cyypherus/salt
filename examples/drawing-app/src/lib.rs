@@ -147,6 +147,7 @@ fn clear_button(area: Area, app: &mut DrawingApp) {
 fn color_button(id: u64, color: Palette, area: Area, app: &mut DrawingApp) {
     app.ctx.view.push(
         rect()
+            .corner_radius(5.0)
             .fill(color.color().lerp(
                 Color::WHITE,
                 if Some(color) == app.state.hovered_color {

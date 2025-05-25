@@ -65,14 +65,14 @@ impl<T> Shape<T> {
     }
 
     /// Execute the on_click callback if present
-    pub(crate) fn run_on_click(&mut self, state: &mut T) {
+    pub(crate) fn run_on_click(&self, state: &mut T) {
         if let Some(func) = &self.on_click {
             func(state);
         }
     }
 
     /// Execute the on_hover callback if present
-    pub(crate) fn run_on_hover(&mut self, state: &mut T, hovered: bool, point: Point) {
+    pub(crate) fn run_on_hover(&self, state: &mut T, hovered: bool, point: Point) {
         if let Some(func) = &self.on_hover {
             func(state, hovered, point);
         }
@@ -80,7 +80,7 @@ impl<T> Shape<T> {
 
     /// Execute the on_drag callback if present
     pub(crate) fn run_on_drag(
-        &mut self,
+        &self,
         state: &mut T,
         phase: DragPhase,
         start: Point,

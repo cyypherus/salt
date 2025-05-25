@@ -196,10 +196,11 @@ impl<T: App> AppCore for T {
             if hover_id != current_hover_id {
                 let mut shapes = Vec::new();
                 std::mem::swap(&mut shapes, &mut view.shapes);
-
-                if let Some(current_id) = current_hover_id {
-                    if let Some(idx) = view.find_shape_by_id(current_id) {
-                        shapes[idx].run_on_hover(state, false, ui::gesture::Point::new(x, y));
+                if current_hover_id.is_some() {
+                    for shape in &shapes {
+                        if Some(shape.id) != hover_hit.map(|h| h.1) {
+                            shape.run_on_hover(state, false, Point::new(x, y));
+                        }
                     }
                 }
 
