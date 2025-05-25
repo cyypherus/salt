@@ -9,7 +9,7 @@ pub mod gesture;
 pub mod view;
 
 pub use color::Color;
-pub use components::{circle, path, rect, text};
-pub use context::{GestureState, AppCtx};
+pub use components::{path, rect, text};
+pub use context::{AppCtx, GestureState};
 pub use gesture::{DragPhase, Point};
 pub use view::{HitTestable, Shape, TextAlign, View};

@@ -2,7 +2,7 @@
 //!
 //! This module provides the View component for rendering shapes in Salt applications.
 
-use crate::ui::components::{CircleBuilder, PathBuilder, RectBuilder, TextBuilder};
+use crate::ui::components::{PathBuilder, RectBuilder, TextBuilder};
 use crate::ui::gesture::{DragPhase, Point};
 use crate::Dimensions;
 
@@ -15,8 +15,6 @@ pub trait HitTestable {
 /// Represents an SVG shape
 #[derive(Clone)]
 pub enum Shape<T: ?Sized> {
-    /// Circle shape
-    Circle(CircleBuilder<T>),
     /// Rectangle shape
     Rect(RectBuilder<T>),
     /// Text shape
@@ -29,7 +27,6 @@ impl<T> Shape<T> {
     /// Execute the on_click callback if present
     pub fn on_click(&mut self, state: &mut T) {
         match self {
-            Shape::Circle(builder) => builder.on_click.as_ref().map(|func| func(state)),
             Shape::Rect(builder) => builder.on_click.as_ref().map(|func| func(state)),
             Shape::Text(builder) => builder.on_click.as_ref().map(|func| func(state)),
             Shape::Path(builder) => builder.on_click.as_ref().map(|func| func(state)),
@@ -39,10 +36,6 @@ impl<T> Shape<T> {
     /// Execute the on_hover callback if present
     pub fn on_hover(&mut self, state: &mut T, hovered: bool, point: Point) {
         match self {
-            Shape::Circle(builder) => builder
-                .on_hover
-                .as_ref()
-                .map(|func| func(state, hovered, point)),
             Shape::Rect(builder) => builder
                 .on_hover
                 .as_ref()
@@ -61,10 +54,6 @@ impl<T> Shape<T> {
     /// Execute the on_drag callback if present
     pub fn on_drag(&mut self, state: &mut T, phase: DragPhase, start: Point, current: Point) {
         match self {
-            Shape::Circle(builder) => builder
-                .on_drag
-                .as_ref()
-                .map(|func| func(state, phase, start, current)),
             Shape::Rect(builder) => builder
                 .on_drag
                 .as_ref()
@@ -105,12 +94,6 @@ impl<T> View<T> {
         Self { shapes: Vec::new() }
     }
 
-    /// Add a circle to the view
-    pub fn circle(&mut self, builder: CircleBuilder<T>) -> &mut Self {
-        self.shapes.push(Shape::Circle(builder));
-        self
-    }
-
     /// Add a rectangle to the view
     pub fn rect(&mut self, builder: RectBuilder<T>) -> &mut Self {
         self.shapes.push(Shape::Rect(builder));
@@ -134,7 +117,6 @@ impl<T> View<T> {
     pub fn hit_test(&self, x: f32, y: f32) -> Option<usize> {
         for (idx, shape) in self.shapes.iter().enumerate().rev() {
             if match shape {
-                Shape::Circle(circle) => circle.hit_test(x, y),
                 Shape::Rect(rect) => rect.hit_test(x, y),
                 Shape::Text(text) => text.hit_test(x, y),
                 Shape::Path(path) => path.hit_test(x, y),
@@ -156,12 +138,6 @@ impl<T> View<T> {
         // Add shapes to the SVG
         for shape in &self.shapes {
             match shape {
-                Shape::Circle(circle) => {
-                    svg.push_str(&format!(
-                        r#"<circle cx="{}" cy="{}" r="{}" fill="{:x}" stroke="{:x}" stroke-width="{}" />"#,
-                        circle.cx, circle.cy, circle.r, circle.fill.to_rgba8(), circle.stroke.to_rgba8(), circle.stroke_width
-                    ));
-                }
                 Shape::Rect(rect) => {
                     let mut rect_str = format!(
                         r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{:x}" stroke="{:x}" stroke-width="{}" "#,
