@@ -11,7 +11,6 @@ use salt::{
 };
 use wasm_bindgen::prelude::*;
 
-// A single stroke with its color
 struct Stroke {
     points: Vec<(f64, f64)>,
     color: Palette,
@@ -43,13 +42,9 @@ struct DrawingApp {
     ctx: AppCtx<DrawingAppState>,
 }
 
-// Drawing application that tracks points when dragging the mouse
 pub struct DrawingAppState {
-    // Collection of strokes for the user's drawing
     strokes: Vec<Stroke>,
-    // Current drawing state
     is_drawing: bool,
-    // Currently selected color
     current_color: Palette,
     hovered_color: Option<Palette>,
 }
