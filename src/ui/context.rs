@@ -59,8 +59,8 @@ impl<T> AppCtx<T> {
     pub fn reset_interaction(&mut self) {
         self.gestures.drag.start_x = None;
         self.gestures.drag.start_y = None;
-        self.gestures.drag.dragging_shape_idx = None;
-        self.gestures.drag.mouse_down_idx = None;
+        self.gestures.drag.dragging_shape_id = None;
+        self.gestures.drag.mouse_down_id = None;
     }
 
     /// Get the current dimensions

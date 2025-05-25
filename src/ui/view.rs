@@ -14,7 +14,16 @@ pub trait HitTestable {
 
 /// Represents an SVG shape
 #[derive(Clone)]
-pub enum Shape<T: ?Sized> {
+pub struct Shape<T: ?Sized> {
+    /// Unique identifier for the shape
+    pub id: u64,
+    /// The actual shape data
+    pub shape_type: ShapeType<T>,
+}
+
+/// Shape types that can be rendered
+#[derive(Clone)]
+pub enum ShapeType<T: ?Sized> {
     /// Rectangle shape
     Rect(RectBuilder<T>),
     /// Text shape
@@ -24,27 +33,32 @@ pub enum Shape<T: ?Sized> {
 }
 
 impl<T> Shape<T> {
+    /// Create a new shape with the given ID and type
+    pub fn new(id: u64, shape_type: ShapeType<T>) -> Self {
+        Self { id, shape_type }
+    }
+    
     /// Execute the on_click callback if present
     pub fn on_click(&mut self, state: &mut T) {
-        match self {
-            Shape::Rect(builder) => builder.on_click.as_ref().map(|func| func(state)),
-            Shape::Text(builder) => builder.on_click.as_ref().map(|func| func(state)),
-            Shape::Path(builder) => builder.on_click.as_ref().map(|func| func(state)),
+        match &mut self.shape_type {
+            ShapeType::Rect(builder) => builder.on_click.as_ref().map(|func| func(state)),
+            ShapeType::Text(builder) => builder.on_click.as_ref().map(|func| func(state)),
+            ShapeType::Path(builder) => builder.on_click.as_ref().map(|func| func(state)),
         };
     }
 
     /// Execute the on_hover callback if present
     pub fn on_hover(&mut self, state: &mut T, hovered: bool, point: Point) {
-        match self {
-            Shape::Rect(builder) => builder
+        match &mut self.shape_type {
+            ShapeType::Rect(builder) => builder
                 .on_hover
                 .as_ref()
                 .map(|func| func(state, hovered, point)),
-            Shape::Text(builder) => builder
+            ShapeType::Text(builder) => builder
                 .on_hover
                 .as_ref()
                 .map(|func| func(state, hovered, point)),
-            Shape::Path(builder) => builder
+            ShapeType::Path(builder) => builder
                 .on_hover
                 .as_ref()
                 .map(|func| func(state, hovered, point)),
@@ -53,20 +67,29 @@ impl<T> Shape<T> {
 
     /// Execute the on_drag callback if present
     pub fn on_drag(&mut self, state: &mut T, phase: DragPhase, start: Point, current: Point) {
-        match self {
-            Shape::Rect(builder) => builder
+        match &mut self.shape_type {
+            ShapeType::Rect(builder) => builder
                 .on_drag
                 .as_ref()
                 .map(|func| func(state, phase, start, current)),
-            Shape::Text(builder) => builder
+            ShapeType::Text(builder) => builder
                 .on_drag
                 .as_ref()
                 .map(|func| func(state, phase, start, current)),
-            Shape::Path(builder) => builder
+            ShapeType::Path(builder) => builder
                 .on_drag
                 .as_ref()
                 .map(|func| func(state, phase, start, current)),
         };
+    }
+    
+    /// Test if a point hits this shape
+    pub fn hit_test(&self, x: f32, y: f32) -> bool {
+        match &self.shape_type {
+            ShapeType::Rect(rect) => rect.hit_test(x, y),
+            ShapeType::Text(text) => text.hit_test(x, y),
+            ShapeType::Path(path) => path.hit_test(x, y),
+        }
     }
 }
 
@@ -94,21 +117,21 @@ impl<T> View<T> {
         Self { shapes: Vec::new() }
     }
 
-    /// Add a rectangle to the view
-    pub fn rect(&mut self, builder: RectBuilder<T>) -> &mut Self {
-        self.shapes.push(Shape::Rect(builder));
+    /// Add a rectangle to the view with a unique ID
+    pub fn rect(&mut self, id: u64, builder: RectBuilder<T>) -> &mut Self {
+        self.shapes.push(Shape::new(id, ShapeType::Rect(builder)));
         self
     }
 
-    /// Add text to the view
-    pub fn text(&mut self, builder: TextBuilder<T>) -> &mut Self {
-        self.shapes.push(Shape::Text(builder));
+    /// Add text to the view with a unique ID
+    pub fn text(&mut self, id: u64, builder: TextBuilder<T>) -> &mut Self {
+        self.shapes.push(Shape::new(id, ShapeType::Text(builder)));
         self
     }
 
-    /// Add a path to the view
-    pub fn path(&mut self, builder: PathBuilder<T>) -> &mut Self {
-        self.shapes.push(Shape::Path(builder));
+    /// Add a path to the view with a unique ID
+    pub fn path(&mut self, id: u64, builder: PathBuilder<T>) -> &mut Self {
+        self.shapes.push(Shape::new(id, ShapeType::Path(builder)));
         self
     }
 
@@ -116,15 +139,27 @@ impl<T> View<T> {
     /// Returns the index of the hit shape if found, in reverse order (top to bottom)
     pub fn hit_test(&self, x: f32, y: f32) -> Option<usize> {
         for (idx, shape) in self.shapes.iter().enumerate().rev() {
-            if match shape {
-                Shape::Rect(rect) => rect.hit_test(x, y),
-                Shape::Text(text) => text.hit_test(x, y),
-                Shape::Path(path) => path.hit_test(x, y),
-            } {
+            if shape.hit_test(x, y) {
                 return Some(idx);
             }
         }
         None
+    }
+    
+    /// Test if a point hits any shape in the view
+    /// Returns the index and ID of the hit shape if found, in reverse order (top to bottom)
+    pub fn hit_test_with_id(&self, x: f32, y: f32) -> Option<(usize, u64)> {
+        for (idx, shape) in self.shapes.iter().enumerate().rev() {
+            if shape.hit_test(x, y) {
+                return Some((idx, shape.id));
+            }
+        }
+        None
+    }
+    
+    /// Find the index of a shape by its ID
+    pub fn find_shape_by_id(&self, id: u64) -> Option<usize> {
+        self.shapes.iter().position(|shape| shape.id == id)
     }
 
     /// Render the view to SVG
@@ -137,8 +172,8 @@ impl<T> View<T> {
 
         // Add shapes to the SVG
         for shape in &self.shapes {
-            match shape {
-                Shape::Rect(rect) => {
+            match &shape.shape_type {
+                ShapeType::Rect(rect) => {
                     let mut rect_str = format!(
                         r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{:x}" stroke="{:x}" stroke-width="{}" "#,
                         rect.x,
@@ -153,14 +188,14 @@ impl<T> View<T> {
                     rect_str.push_str("/>");
                     svg.push_str(&rect_str);
                 }
-                Shape::Text(text) => {
+                ShapeType::Text(text) => {
                     svg.push_str(&format!(
                         r#"<text x="{}" y="{}" font-family="{}" font-size="{}" fill="{:x}" text-anchor="{}">{}</text>"#,
                         text.x, text.y, text.font_family, text.font_size,
                         text.fill.to_rgba8(), text.text_anchor, text.text
                     ));
                 }
-                Shape::Path(path) => {
+                ShapeType::Path(path) => {
                     let path_data = path.commands.iter().fold(String::new(), |mut acc, cmd| {
                         match cmd {
                             crate::ui::components::PathCommand::MoveTo(x, y) => {

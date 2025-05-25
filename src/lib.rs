@@ -102,9 +102,6 @@ pub trait App {
     fn state(&mut self) -> (&mut AppCtx<Self::State>, &mut Self::State);
 }
 
-/// Implementation of App for any type that implements InteractiveApp
-///
-/// This provides all the gesture and event handling automatically.
 impl<T: App> AppCore for T {
     fn new() -> Self {
         <T as App>::new()
@@ -119,15 +116,15 @@ impl<T: App> AppCore for T {
         // Handle mouse down event
         if event.event_type == EventType::MouseDown {
             // Hit test the view to check if any interactive elements were clicked
-            if let Some(idx) = view.hit_test(x, y) {
+            if let Some((idx, id)) = view.hit_test_with_id(x, y) {
                 let mut shapes = Vec::new();
                 std::mem::swap(&mut shapes, &mut view.shapes);
 
                 // Store drag start position and the element that received mouse down
                 ctx.gestures.drag.start_x = Some(x);
                 ctx.gestures.drag.start_y = Some(y);
-                ctx.gestures.drag.dragging_shape_idx = Some(idx);
-                ctx.gestures.drag.mouse_down_idx = Some(idx);
+                ctx.gestures.drag.dragging_shape_id = Some(id);
+                ctx.gestures.drag.mouse_down_id = Some(id);
 
                 // Call the on_drag handler with start phase
                 if let (Some(start_x), Some(start_y)) =
@@ -150,32 +147,37 @@ impl<T: App> AppCore for T {
         // Handle mouse up event
         if event.event_type == EventType::MouseUp {
             // Check if we released on the same shape that we started on (click behavior)
-            let current_idx = view.hit_test(x, y);
+            let current_hit = view.hit_test_with_id(x, y);
             let drag = &ctx.gestures.drag;
 
-            if let (Some(drag_idx), Some(start_x), Some(start_y), Some(down_idx)) = (
-                drag.dragging_shape_idx,
+            if let (Some(drag_id), Some(start_x), Some(start_y), Some(down_id)) = (
+                drag.dragging_shape_id,
                 drag.start_x,
                 drag.start_y,
-                drag.mouse_down_idx,
+                drag.mouse_down_id,
             ) {
-                let mut shapes = Vec::new();
-                std::mem::swap(&mut shapes, &mut view.shapes);
+                // Find the current index of the shape with dragging_shape_id
+                if let Some(drag_idx) = view.find_shape_by_id(drag_id) {
+                    let mut shapes = Vec::new();
+                    std::mem::swap(&mut shapes, &mut view.shapes);
 
-                // Notify the shape of drag end
-                shapes[drag_idx].on_drag(
-                    state,
-                    ui::gesture::DragPhase::End,
-                    ui::gesture::Point::new(start_x, start_y),
-                    ui::gesture::Point::new(x, y),
-                );
+                    // Notify the shape of drag end
+                    shapes[drag_idx].on_drag(
+                        state,
+                        ui::gesture::DragPhase::End,
+                        ui::gesture::Point::new(start_x, start_y),
+                        ui::gesture::Point::new(x, y),
+                    );
 
-                // If mouse up is on the same element as mouse down, trigger click
-                if current_idx == Some(down_idx) {
-                    shapes[down_idx].on_click(state);
+                    // If mouse up is on the same element as mouse down, trigger click
+                    if let Some((down_idx, _)) = current_hit {
+                        if current_hit.map(|(_, id)| id) == Some(down_id) {
+                            shapes[down_idx].on_click(state);
+                        }
+                    }
+
+                    std::mem::swap(&mut shapes, &mut view.shapes);
                 }
-
-                std::mem::swap(&mut shapes, &mut view.shapes);
             }
 
             ctx.reset_interaction();
@@ -186,25 +188,30 @@ impl<T: App> AppCore for T {
         // Handle mouse move event
         if event.event_type == EventType::MouseMove {
             // Handle hover effect
-            let hover_idx = view.hit_test(x, y);
-            let current_hover_idx = ctx.gestures.hover.hover_shape_idx;
+            let hover_hit = view.hit_test_with_id(x, y);
+            let current_hover_id = ctx.gestures.hover.hover_shape_id;
+            let hover_id = hover_hit.map(|(_, id)| id);
 
             // Always handle hover effects, even during drags
-            if hover_idx != current_hover_idx {
+            if hover_id != current_hover_id {
                 let mut shapes = Vec::new();
                 std::mem::swap(&mut shapes, &mut view.shapes);
 
-                if let Some(idx) = current_hover_idx {
-                    shapes[idx].on_hover(state, false, ui::gesture::Point::new(x, y));
+                if let Some(current_id) = current_hover_id {
+                    if let Some(idx) = view.find_shape_by_id(current_id) {
+                        shapes[idx].on_hover(state, false, ui::gesture::Point::new(x, y));
+                    }
                 }
 
                 // Call on_hover for the new shape
-                if let Some(idx) = hover_idx {
+                if let Some((idx, id)) = hover_hit {
                     shapes[idx].on_hover(state, true, ui::gesture::Point::new(x, y));
+                    ctx.gestures.hover.hover_shape_id = Some(id);
+                } else {
+                    ctx.gestures.hover.hover_shape_id = None;
                 }
 
                 std::mem::swap(&mut shapes, &mut view.shapes);
-                ctx.gestures.hover.hover_shape_idx = hover_idx;
 
                 // Return true to indicate we processed a hover event
                 return true;
@@ -212,20 +219,23 @@ impl<T: App> AppCore for T {
 
             // Handle dragging
             let drag = &ctx.gestures.drag;
-            if let (Some(idx), Some(start_x), Some(start_y)) =
-                (drag.dragging_shape_idx, drag.start_x, drag.start_y)
+            if let (Some(drag_id), Some(start_x), Some(start_y)) =
+                (drag.dragging_shape_id, drag.start_x, drag.start_y)
             {
-                let mut shapes = Vec::new();
-                std::mem::swap(&mut shapes, &mut view.shapes);
-                shapes[idx].on_drag(
-                    state,
-                    ui::gesture::DragPhase::Move,
-                    ui::gesture::Point::new(start_x, start_y),
-                    ui::gesture::Point::new(x, y),
-                );
-                std::mem::swap(&mut shapes, &mut view.shapes);
+                // Find the current index of the shape with dragging_shape_id
+                if let Some(idx) = view.find_shape_by_id(drag_id) {
+                    let mut shapes = Vec::new();
+                    std::mem::swap(&mut shapes, &mut view.shapes);
+                    shapes[idx].on_drag(
+                        state,
+                        ui::gesture::DragPhase::Move,
+                        ui::gesture::Point::new(start_x, start_y),
+                        ui::gesture::Point::new(x, y),
+                    );
+                    std::mem::swap(&mut shapes, &mut view.shapes);
 
-                return true;
+                    return true;
+                }
             }
         }
 
@@ -247,64 +257,17 @@ pub struct DragState {
     pub start_x: Option<f32>,
     /// Y coordinate where drag started
     pub start_y: Option<f32>,
-    /// Index of shape being dragged
-    pub dragging_shape_idx: Option<usize>,
-    /// Index of shape that received mouse down
-    pub mouse_down_idx: Option<usize>,
+    /// ID of shape being dragged
+    pub dragging_shape_id: Option<u64>,
+    /// ID of shape that received mouse down
+    pub mouse_down_id: Option<u64>,
 }
 
 /// State for tracking hover operations
 #[derive(Default, Clone, Debug)]
 pub struct HoverState {
-    /// Index of shape being hovered
-    pub hover_shape_idx: Option<usize>,
-}
-
-// Macro for exporting a specific App implementation
-#[macro_export]
-macro_rules! salt_app_core {
-    ($app_type:ty) => {
-        use $crate::wasm_bindgen::prelude::*;
-        use $crate::web_sys::console;
-        use $crate::AppCore;
-
-        #[wasm_bindgen]
-        pub struct SaltApp {
-            app: $app_type,
-        }
-
-        #[wasm_bindgen]
-        impl SaltApp {
-            #[wasm_bindgen(constructor)]
-            pub fn new() -> Self {
-                console::log_1(&"Creating custom SaltApp".into());
-                Self {
-                    app: <$app_type as $crate::AppCore>::new(),
-                }
-            }
-
-            pub fn handle_mouse_event(&mut self, event_type: &str, x: f64, y: f64) -> bool {
-                let event = $crate::MouseEvent {
-                    event_type: $crate::EventType::from(event_type),
-                    x,
-                    y,
-                };
-
-                self.app.handle_event(event)
-            }
-
-            pub fn render_svg(&mut self, width: u32, height: u32) -> String {
-                let dimensions = $crate::Dimensions { width, height };
-                self.app.render(dimensions)
-            }
-        }
-
-        #[wasm_bindgen(start)]
-        pub fn start() -> Result<(), JsValue> {
-            console::log_1(&"Custom Salt app initialized".into());
-            Ok(())
-        }
-    };
+    /// ID of shape being hovered
+    pub hover_shape_id: Option<u64>,
 }
 
 #[macro_export]
@@ -351,4 +314,53 @@ macro_rules! salt_app {
             Ok(())
         }
     };
+}
+
+#[macro_export]
+macro_rules! id {
+    () => {{
+        const ID: u64 = $crate::const_hash(file!(), line!(), column!());
+        ID
+    }};
+    ($other:expr) => {{
+        const ID: u64 = $crate::const_hash(file!(), line!(), column!());
+        ID ^ ($other)
+    }};
+}
+
+/// Hash function for generating stable IDs at compile time
+#[inline(always)]
+pub const fn const_hash(file: &str, line: u32, column: u32) -> u64 {
+    // Simple FNV-1a hash
+    const FNV_PRIME: u64 = 1099511628211;
+    const FNV_OFFSET_BASIS: u64 = 14695981039346656037;
+
+    let mut hash = FNV_OFFSET_BASIS;
+
+    // Hash the file path
+    let file_bytes = file.as_bytes();
+    let mut i = 0;
+    while i < file_bytes.len() {
+        hash ^= file_bytes[i] as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+        i += 1;
+    }
+
+    // Hash the line number
+    let mut line_val = line;
+    while line_val > 0 {
+        hash ^= (line_val & 0xff) as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+        line_val >>= 8;
+    }
+
+    // Hash the column number
+    let mut col_val = column;
+    while col_val > 0 {
+        hash ^= (col_val & 0xff) as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+        col_val >>= 8;
+    }
+
+    hash
 }

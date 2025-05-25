@@ -1,7 +1,7 @@
 use backer::{models::Area, nodes::*, Layout};
 use color::HueDirection;
 use salt::{
-    salt_app,
+    id, salt_app,
     ui::{
         components::{path, rect, text},
         gesture::DragPhase,
@@ -84,81 +84,14 @@ impl App for DrawingApp {
                     row_spaced(
                         10.,
                         vec![
-                            draw(|area, app: &mut DrawingApp| {
-                                app.ctx.view.rect(
-                                    rect()
-                                        .fill(Color::WHITE)
-                                        .stroke(Color::BLACK)
-                                        .stroke_width(1.0)
-                                        .x(area.x)
-                                        .y(area.y)
-                                        .width(area.width)
-                                        .height(area.height)
-                                        .on_click(|state: &mut DrawingAppState| {
-                                            state.strokes.clear();
-                                        }),
-                                );
-                                app.ctx.view.text(
-                                    text()
-                                        .fill(Color::BLACK)
-                                        .x(area.x + area.width / 2.0)
-                                        .y(area.y + area.height / 2.0)
-                                        .text_align(salt::ui::TextAlign::Center)
-                                        .text("Clear")
-                                        .font_size(20.)
-                                        .on_click(|state: &mut DrawingAppState| {
-                                            state.strokes.clear();
-                                        }),
-                                );
-                            }),
+                            draw(clear_button),
                             group(
                                 colors
                                     .into_iter()
-                                    .map(move |color| {
+                                    .enumerate()
+                                    .map(move |(i, color)| {
                                         draw(move |area, app: &mut DrawingApp| {
-                                            app.ctx.view.rect(
-                                                rect()
-                                                    .fill(color.color().lerp(
-                                                        Color::WHITE,
-                                                        if Some(color) == app.state.hovered_color {
-                                                            0.2
-                                                        } else {
-                                                            0.0
-                                                        },
-                                                        HueDirection::Shorter,
-                                                    ))
-                                                    .stroke(if color == app.state.current_color {
-                                                        Color::BLACK
-                                                    } else {
-                                                        Color::TRANSPARENT
-                                                    })
-                                                    .stroke_width(
-                                                        if color == app.state.current_color {
-                                                            5.0
-                                                        } else {
-                                                            1.0
-                                                        },
-                                                    )
-                                                    .x(area.x)
-                                                    .y(area.y)
-                                                    .width(area.width)
-                                                    .height(area.height)
-                                                    .on_click(move |state: &mut DrawingAppState| {
-                                                        state.current_color = color;
-                                                    })
-                                                    .on_hover(
-                                                        move |state: &mut DrawingAppState, hovered, _| {
-                                                            if hovered {
-                                                                state.hovered_color =
-                                                                    Some(color);
-                                                            } else if state.hovered_color
-                                                                == Some(color)
-                                                            {
-                                                                state.hovered_color = None;
-                                                            }
-                                                        },
-                                                    ),
-                                            );
+                                            color_button(id!(i as u64), color, area, app);
                                         })
                                     })
                                     .collect(),
@@ -166,56 +99,7 @@ impl App for DrawingApp {
                         ],
                     )
                     .height(80.),
-                    draw(|area, app: &mut DrawingApp| {
-                        app.ctx.view.rect(
-                            rect()
-                                .fill(Color::WHITE)
-                                .x(area.x)
-                                .y(area.y)
-                                .width(area.width)
-                                .height(area.height)
-                                .on_drag(
-                                    move |state: &mut DrawingAppState, phase, _, current| match phase {
-                                        DragPhase::Start => {
-                                            state.is_drawing = true;
-                                            state.strokes.push(Stroke {
-                                                points: Vec::new(),
-                                                color: state.current_color,
-                                            });
-                                        }
-                                        DragPhase::Move => {
-                                            if let Some(stroke) = state.strokes.last_mut() {
-                                                stroke
-                                                    .points
-                                                    .push((current.x as f64, current.y as f64));
-                                            }
-                                        }
-                                        DragPhase::End => {
-                                            if let Some(stroke) = state.strokes.last_mut() {
-                                                stroke
-                                                    .points
-                                                    .push((current.x as f64, current.y as f64));
-                                            }
-                                            state.is_drawing = false;
-                                        }
-                                    },
-                                ),
-                        );
-                        for stroke in &app.state.strokes {
-                            if stroke.points.is_empty() {
-                                continue;
-                            }
-                            let mut path = path()
-                                .move_to(stroke.points[0].0 as f32, stroke.points[0].1 as f32);
-                            for point in &stroke.points {
-                                path = path.line_to(point.0 as f32, point.1 as f32);
-                            }
-                            app.ctx
-                                .view
-                                .path(path.stroke_width(10.).stroke(stroke.color.color()));
-                        }
-                    })
-                    .pad(20.),
+                    draw(canvas).pad(20.),
                 ]),
             ])
         }))
@@ -227,6 +111,122 @@ impl App for DrawingApp {
 
     fn state(&mut self) -> (&mut AppCtx<Self::State>, &mut Self::State) {
         (&mut self.ctx, &mut self.state)
+    }
+}
+
+fn clear_button(area: Area, app: &mut DrawingApp) {
+    app.ctx.view.rect(
+        id!(),
+        rect()
+            .fill(Color::WHITE)
+            .stroke(Color::BLACK)
+            .stroke_width(1.0)
+            .x(area.x)
+            .y(area.y)
+            .width(area.width)
+            .height(area.height)
+            .on_click(|state: &mut DrawingAppState| {
+                state.strokes.clear();
+            }),
+    );
+    app.ctx.view.text(
+        id!(),
+        text()
+            .fill(Color::BLACK)
+            .x(area.x + area.width / 2.0)
+            .y(area.y + area.height / 2.0)
+            .text_align(salt::ui::TextAlign::Center)
+            .text("Clear")
+            .font_size(20.)
+            .on_click(|state: &mut DrawingAppState| {
+                state.strokes.clear();
+            }),
+    );
+}
+
+fn color_button(id: u64, color: Palette, area: Area, app: &mut DrawingApp) {
+    app.ctx.view.rect(
+        id!(id),
+        rect()
+            .fill(color.color().lerp(
+                Color::WHITE,
+                if Some(color) == app.state.hovered_color {
+                    0.2
+                } else {
+                    0.0
+                },
+                HueDirection::Shorter,
+            ))
+            .stroke(if color == app.state.current_color {
+                Color::BLACK
+            } else {
+                Color::TRANSPARENT
+            })
+            .stroke_width(if color == app.state.current_color {
+                5.0
+            } else {
+                1.0
+            })
+            .x(area.x)
+            .y(area.y)
+            .width(area.width)
+            .height(area.height)
+            .on_click(move |state: &mut DrawingAppState| {
+                state.current_color = color;
+            })
+            .on_hover(move |state: &mut DrawingAppState, hovered, _| {
+                if hovered {
+                    state.hovered_color = Some(color);
+                } else if state.hovered_color == Some(color) {
+                    state.hovered_color = None;
+                }
+            }),
+    );
+}
+
+fn canvas(area: Area, app: &mut DrawingApp) {
+    app.ctx.view.rect(
+        id!(),
+        rect()
+            .fill(Color::WHITE)
+            .x(area.x)
+            .y(area.y)
+            .width(area.width)
+            .height(area.height)
+            .on_drag(
+                move |state: &mut DrawingAppState, phase, _, current| match phase {
+                    DragPhase::Start => {
+                        state.is_drawing = true;
+                        state.strokes.push(Stroke {
+                            points: Vec::new(),
+                            color: state.current_color,
+                        });
+                    }
+                    DragPhase::Move => {
+                        if let Some(stroke) = state.strokes.last_mut() {
+                            stroke.points.push((current.x as f64, current.y as f64));
+                        }
+                    }
+                    DragPhase::End => {
+                        if let Some(stroke) = state.strokes.last_mut() {
+                            stroke.points.push((current.x as f64, current.y as f64));
+                        }
+                        state.is_drawing = false;
+                    }
+                },
+            ),
+    );
+    for stroke in &app.state.strokes {
+        if stroke.points.is_empty() {
+            continue;
+        }
+        let mut path = path().move_to(stroke.points[0].0 as f32, stroke.points[0].1 as f32);
+        for point in &stroke.points {
+            path = path.line_to(point.0 as f32, point.1 as f32);
+        }
+        app.ctx
+            .view
+            .path(id!(), path.stroke_width(10.).stroke(stroke.color.color()));
     }
 }
 
