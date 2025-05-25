@@ -130,7 +130,7 @@ impl<T: App> AppCore for T {
                 if let (Some(start_x), Some(start_y)) =
                     (ctx.gestures.drag.start_x, ctx.gestures.drag.start_y)
                 {
-                    shapes[idx].on_drag(
+                    shapes[idx].run_on_drag(
                         state,
                         ui::gesture::DragPhase::Start,
                         ui::gesture::Point::new(start_x, start_y),
@@ -162,7 +162,7 @@ impl<T: App> AppCore for T {
                     std::mem::swap(&mut shapes, &mut view.shapes);
 
                     // Notify the shape of drag end
-                    shapes[drag_idx].on_drag(
+                    shapes[drag_idx].run_on_drag(
                         state,
                         ui::gesture::DragPhase::End,
                         ui::gesture::Point::new(start_x, start_y),
@@ -172,7 +172,7 @@ impl<T: App> AppCore for T {
                     // If mouse up is on the same element as mouse down, trigger click
                     if let Some((down_idx, _)) = current_hit {
                         if current_hit.map(|(_, id)| id) == Some(down_id) {
-                            shapes[down_idx].on_click(state);
+                            shapes[down_idx].run_on_click(state);
                         }
                     }
 
@@ -199,13 +199,13 @@ impl<T: App> AppCore for T {
 
                 if let Some(current_id) = current_hover_id {
                     if let Some(idx) = view.find_shape_by_id(current_id) {
-                        shapes[idx].on_hover(state, false, ui::gesture::Point::new(x, y));
+                        shapes[idx].run_on_hover(state, false, ui::gesture::Point::new(x, y));
                     }
                 }
 
                 // Call on_hover for the new shape
                 if let Some((idx, id)) = hover_hit {
-                    shapes[idx].on_hover(state, true, ui::gesture::Point::new(x, y));
+                    shapes[idx].run_on_hover(state, true, ui::gesture::Point::new(x, y));
                     ctx.gestures.hover.hover_shape_id = Some(id);
                 } else {
                     ctx.gestures.hover.hover_shape_id = None;
@@ -226,7 +226,7 @@ impl<T: App> AppCore for T {
                 if let Some(idx) = view.find_shape_by_id(drag_id) {
                     let mut shapes = Vec::new();
                     std::mem::swap(&mut shapes, &mut view.shapes);
-                    shapes[idx].on_drag(
+                    shapes[idx].run_on_drag(
                         state,
                         ui::gesture::DragPhase::Move,
                         ui::gesture::Point::new(start_x, start_y),

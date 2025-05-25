@@ -2,15 +2,11 @@
 //!
 //! This module provides a rectangle component for Salt applications.
 
-use crate::ui::color::Color;
-use crate::ui::gesture::callbacks::{OnClick, OnDrag, OnHover};
-use crate::ui::gesture::{DragPhase, Point};
-use crate::ui::HitTestable;
-use std::rc::Rc;
+use crate::ui::{color::Color, Shape, ShapeType};
 
 /// Builder for creating rectangle elements
 #[derive(Clone)]
-pub struct RectBuilder<T: ?Sized> {
+pub struct RectBuilder {
     /// X-coordinate of top-left corner
     pub x: f32,
     /// Y-coordinate of top-left corner
@@ -25,25 +21,19 @@ pub struct RectBuilder<T: ?Sized> {
     pub stroke: Color,
     /// Stroke width
     pub stroke_width: f32,
-    /// Click callback
-    pub on_click: OnClick<T>,
-    /// Hover callback
-    pub on_hover: OnHover<T>,
-    /// Drag callback
-    pub on_drag: OnDrag<T>,
+    /// Corner radius for all corners
+    pub corner_radius: f32,
 }
 
-impl<T> HitTestable for RectBuilder<T> {
-    fn hit_test(&self, x: f32, y: f32) -> bool {
-        if self.on_drag.is_none() && self.on_click.is_none() && self.on_hover.is_none() {
-            return false;
-        }
+impl RectBuilder {
+    /// Test if a point is within the rectangle shape (for hit testing)
+    pub fn hit_test_shape(&self, x: f32, y: f32) -> bool {
         // Simple bounds test for rectangle
         x >= self.x && x <= self.x + self.width && y >= self.y && y <= self.y + self.height
     }
 }
 
-impl<T> RectBuilder<T> {
+impl RectBuilder {
     /// Set the x-coordinate
     pub fn x(mut self, x: f32) -> Self {
         self.x = x;
@@ -86,37 +76,27 @@ impl<T> RectBuilder<T> {
         self
     }
 
-    /// Set the click callback
-    pub fn on_click(mut self, callback: impl Fn(&mut T) + 'static) -> Self {
-        self.on_click = Some(Rc::new(callback));
+    /// Set the corner radius for all corners
+    pub fn corner_radius(mut self, radius: f32) -> Self {
+        self.corner_radius = radius;
         self
     }
 
-    /// Set the hover callback
-    pub fn on_hover(mut self, callback: impl Fn(&mut T, bool, Point) + 'static) -> Self {
-        self.on_hover = Some(Rc::new(callback));
-        self
-    }
-
-    /// Set the drag callback
-    pub fn on_drag(mut self, callback: impl Fn(&mut T, DragPhase, Point, Point) + 'static) -> Self {
-        self.on_drag = Some(Rc::new(callback));
-        self
+    pub fn finish<T>(self, id: u64) -> Shape<T> {
+        Shape::new(id, ShapeType::Rect(self))
     }
 }
 
 /// Create a new rectangle builder with default properties
-pub fn rect<T>() -> RectBuilder<T> {
+pub fn rect() -> RectBuilder {
     RectBuilder {
         x: 0.0,
         y: 0.0,
         width: 100.0,
         height: 100.0,
-        fill: Color::TRANSPARENT,
-        stroke: Color::BLACK,
-        stroke_width: 1.0,
-        on_click: None,
-        on_hover: None,
-        on_drag: None,
+        fill: Color::BLACK,
+        stroke: Color::TRANSPARENT,
+        stroke_width: 0.0,
+        corner_radius: 0.0,
     }
 }

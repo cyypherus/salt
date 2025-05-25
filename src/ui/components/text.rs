@@ -3,15 +3,11 @@
 //! This module provides a text component for Salt applications.
 
 use crate::ui::color::Color;
-use crate::ui::gesture::callbacks::{OnClick, OnDrag, OnHover};
-use crate::ui::gesture::{DragPhase, Point};
-use crate::ui::HitTestable;
-use crate::ui::TextAlign;
-use std::rc::Rc;
+use crate::ui::{Shape, ShapeType, TextAlign};
 
 /// Builder for creating text elements
 #[derive(Clone)]
-pub struct TextBuilder<T: ?Sized> {
+pub struct TextBuilder {
     /// X-coordinate
     pub x: f32,
     /// Y-coordinate
@@ -26,19 +22,11 @@ pub struct TextBuilder<T: ?Sized> {
     pub fill: Color,
     /// Text anchor (alignment)
     pub text_anchor: String,
-    /// Click callback
-    pub on_click: OnClick<T>,
-    /// Hover callback
-    pub on_hover: OnHover<T>,
-    /// Drag callback
-    pub on_drag: OnDrag<T>,
 }
 
-impl<T> HitTestable for TextBuilder<T> {
-    fn hit_test(&self, x: f32, y: f32) -> bool {
-        if self.on_drag.is_none() && self.on_click.is_none() && self.on_hover.is_none() {
-            return false;
-        }
+impl TextBuilder {
+    /// Test if a point is within the text bounding box (for hit testing)
+    pub fn hit_test_shape(&self, x: f32, y: f32) -> bool {
         // Simple bounding box for text
         let text_width = self.text.len() as f32 * self.font_size * 0.6;
         let text_height = self.font_size * 1.2;
@@ -54,9 +42,7 @@ impl<T> HitTestable for TextBuilder<T> {
 
         x >= left && x <= right && y >= top && y <= bottom
     }
-}
 
-impl<T> TextBuilder<T> {
     /// Set the x-coordinate
     pub fn x(mut self, x: f32) -> Self {
         self.x = x;
@@ -105,27 +91,13 @@ impl<T> TextBuilder<T> {
         self
     }
 
-    /// Set the click callback
-    pub fn on_click(mut self, callback: impl Fn(&mut T) + 'static) -> Self {
-        self.on_click = Some(Rc::new(callback));
-        self
-    }
-
-    /// Set the hover callback
-    pub fn on_hover(mut self, callback: impl Fn(&mut T, bool, Point) + 'static) -> Self {
-        self.on_hover = Some(Rc::new(callback));
-        self
-    }
-
-    /// Set the drag callback
-    pub fn on_drag(mut self, callback: impl Fn(&mut T, DragPhase, Point, Point) + 'static) -> Self {
-        self.on_drag = Some(Rc::new(callback));
-        self
+    pub fn finish<T>(self, id: u64) -> Shape<T> {
+        Shape::new(id, ShapeType::Text(self))
     }
 }
 
 /// Create a new text builder with default properties
-pub fn text<T>() -> TextBuilder<T> {
+pub fn text() -> TextBuilder {
     TextBuilder {
         x: 0.0,
         y: 0.0,
@@ -134,8 +106,5 @@ pub fn text<T>() -> TextBuilder<T> {
         font_size: 12.0,
         fill: Color::BLACK,
         text_anchor: "start".to_string(),
-        on_click: None,
-        on_hover: None,
-        on_drag: None,
     }
 }

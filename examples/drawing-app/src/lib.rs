@@ -115,8 +115,7 @@ impl App for DrawingApp {
 }
 
 fn clear_button(area: Area, app: &mut DrawingApp) {
-    app.ctx.view.rect(
-        id!(),
+    app.ctx.view.push(
         rect()
             .fill(Color::WHITE)
             .stroke(Color::BLACK)
@@ -125,12 +124,12 @@ fn clear_button(area: Area, app: &mut DrawingApp) {
             .y(area.y)
             .width(area.width)
             .height(area.height)
+            .finish(id!())
             .on_click(|state: &mut DrawingAppState| {
                 state.strokes.clear();
             }),
     );
-    app.ctx.view.text(
-        id!(),
+    app.ctx.view.push(
         text()
             .fill(Color::BLACK)
             .x(area.x + area.width / 2.0)
@@ -138,6 +137,7 @@ fn clear_button(area: Area, app: &mut DrawingApp) {
             .text_align(salt::ui::TextAlign::Center)
             .text("Clear")
             .font_size(20.)
+            .finish(id!())
             .on_click(|state: &mut DrawingAppState| {
                 state.strokes.clear();
             }),
@@ -145,8 +145,7 @@ fn clear_button(area: Area, app: &mut DrawingApp) {
 }
 
 fn color_button(id: u64, color: Palette, area: Area, app: &mut DrawingApp) {
-    app.ctx.view.rect(
-        id!(id),
+    app.ctx.view.push(
         rect()
             .fill(color.color().lerp(
                 Color::WHITE,
@@ -171,6 +170,7 @@ fn color_button(id: u64, color: Palette, area: Area, app: &mut DrawingApp) {
             .y(area.y)
             .width(area.width)
             .height(area.height)
+            .finish(id!(id))
             .on_click(move |state: &mut DrawingAppState| {
                 state.current_color = color;
             })
@@ -185,14 +185,14 @@ fn color_button(id: u64, color: Palette, area: Area, app: &mut DrawingApp) {
 }
 
 fn canvas(area: Area, app: &mut DrawingApp) {
-    app.ctx.view.rect(
-        id!(),
+    app.ctx.view.push(
         rect()
             .fill(Color::WHITE)
             .x(area.x)
             .y(area.y)
             .width(area.width)
             .height(area.height)
+            .finish(id!())
             .on_drag(
                 move |state: &mut DrawingAppState, phase, _, current| match phase {
                     DragPhase::Start => {
@@ -224,9 +224,12 @@ fn canvas(area: Area, app: &mut DrawingApp) {
         for point in &stroke.points {
             path = path.line_to(point.0 as f32, point.1 as f32);
         }
-        app.ctx
-            .view
-            .path(id!(), path.stroke_width(10.).stroke(stroke.color.color()));
+        app.ctx.view.push(
+            path.stroke_width(10.)
+                .fill(Color::TRANSPARENT)
+                .stroke(stroke.color.color())
+                .finish(id!()),
+        );
     }
 }
 

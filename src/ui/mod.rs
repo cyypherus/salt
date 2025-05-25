@@ -12,4 +12,4 @@ pub use color::Color;
 pub use components::{path, rect, text};
 pub use context::{AppCtx, GestureState};
 pub use gesture::{DragPhase, Point};
-pub use view::{HitTestable, Shape, ShapeType, TextAlign, View};
+pub use view::{Shape, ShapeType, TextAlign, View};

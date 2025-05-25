@@ -2,11 +2,7 @@
 //!
 //! This module provides a path component for Salt applications.
 
-use crate::ui::color::Color;
-use crate::ui::gesture::callbacks::{OnClick, OnDrag, OnHover};
-use crate::ui::gesture::{DragPhase, Point};
-use crate::ui::HitTestable;
-use std::rc::Rc;
+use crate::ui::{color::Color, Shape, ShapeType};
 
 /// Represents an SVG path command
 #[derive(Clone, Debug)]
@@ -23,7 +19,7 @@ pub enum PathCommand {
 
 /// Builder for creating path elements
 #[derive(Clone)]
-pub struct PathBuilder<T: ?Sized> {
+pub struct PathBuilder {
     /// List of path commands
     pub commands: Vec<PathCommand>,
     /// Fill color
@@ -32,12 +28,6 @@ pub struct PathBuilder<T: ?Sized> {
     pub stroke: Color,
     /// Stroke width
     pub stroke_width: f32,
-    /// Click callback
-    pub on_click: OnClick<T>,
-    /// Hover callback
-    pub on_hover: OnHover<T>,
-    /// Drag callback
-    pub on_drag: OnDrag<T>,
     /// Calculated bounds (min_x, min_y, max_x, max_y)
     pub bounds: Option<(f32, f32, f32, f32)>,
     /// Current x position
@@ -46,11 +36,9 @@ pub struct PathBuilder<T: ?Sized> {
     pub current_y: f32,
 }
 
-impl<T> HitTestable for PathBuilder<T> {
-    fn hit_test(&self, x: f32, y: f32) -> bool {
-        if self.on_drag.is_none() && self.on_click.is_none() && self.on_hover.is_none() {
-            return false;
-        }
+impl PathBuilder {
+    /// Test if a point is within the path bounds (for hit testing)
+    pub fn hit_test_shape(&self, x: f32, y: f32) -> bool {
         // Use the calculated bounds for hit testing
         if let Some((min_x, min_y, max_x, max_y)) = self.bounds {
             // Add stroke width to make the bounding box a bit larger
@@ -64,9 +52,7 @@ impl<T> HitTestable for PathBuilder<T> {
             false
         }
     }
-}
 
-impl<T> PathBuilder<T> {
     // Update bounds with a new point
     fn update_bounds(&mut self, x: f32, y: f32) {
         match self.bounds {
@@ -149,35 +135,18 @@ impl<T> PathBuilder<T> {
         self
     }
 
-    /// Set the click callback
-    pub fn on_click(mut self, callback: impl Fn(&mut T) + 'static) -> Self {
-        self.on_click = Some(Rc::new(callback));
-        self
-    }
-
-    /// Set the hover callback
-    pub fn on_hover(mut self, callback: impl Fn(&mut T, bool, Point) + 'static) -> Self {
-        self.on_hover = Some(Rc::new(callback));
-        self
-    }
-
-    /// Set the drag callback
-    pub fn on_drag(mut self, callback: impl Fn(&mut T, DragPhase, Point, Point) + 'static) -> Self {
-        self.on_drag = Some(Rc::new(callback));
-        self
+    pub fn finish<T>(self, id: u64) -> Shape<T> {
+        Shape::new(id, ShapeType::Path(self))
     }
 }
 
 /// Create a new path builder with default properties
-pub fn path<T>() -> PathBuilder<T> {
+pub fn path() -> PathBuilder {
     PathBuilder {
         commands: Vec::new(),
-        fill: Color::TRANSPARENT,
-        stroke: Color::BLACK,
-        stroke_width: 1.0,
-        on_click: None,
-        on_hover: None,
-        on_drag: None,
+        fill: Color::BLACK,
+        stroke: Color::TRANSPARENT,
+        stroke_width: 0.0,
         bounds: None,
         current_x: 0.0,
         current_y: 0.0,
